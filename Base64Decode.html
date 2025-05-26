@@ -56,7 +56,7 @@
 	</main>
 	<script type="module">
 		function isBase64PDF(base64String) {
-			return base64String.substring(0, 4) === 'JVBER';
+			return base64String.substring(0, 5) === 'JVBER';
 		}
 		function isBase64Excel(base64String) {
 			console.log('isBase64Excel', base64String.substring(0, 5), base64String.substring(0, 5) === 'PD94b');
