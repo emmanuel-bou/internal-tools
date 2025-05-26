@@ -4,6 +4,7 @@
 	<meta charset="utf-8" />
 	<title>Décodage Base64</title>
 	<link rel="shortcut icon" type="image/png" href="favicon.png"/>
+	<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 	<script src="https://cdn.tailwindcss.com"></script>
 	<script>
 		tailwind.config = {
@@ -15,7 +16,23 @@
 				}
 			}
 		}
-	</script>	
+	</script>
+	<style>
+		#excel-preview table {
+			border-collapse: collapse;
+			margin-top: 1rem;
+			font-family: sans-serif;
+		}
+		#excel-preview td, #excel-preview th {
+			border: 1px solid #ccc;
+			padding: 4px 8px;
+		}
+		#excel-preview .bold { font-weight: bold; }
+		#excel-preview .italic { font-style: italic; }
+		#excel-preview .align-left { text-align: left; }
+		#excel-preview .align-center { text-align: center; }
+		#excel-preview .align-right { text-align: right; }		
+	</style>
 </head>
 <body class="h-full flex flex-col flex-nowrap p-1">
 	<header class="grow-0 flex flex-row space-x-3 ">
@@ -31,10 +48,16 @@
 		<div style="display: none;" id="text-preview" class="max-w-full overflow-x-auto border-2">
 			<pre id="text-content" class="whitespace-pre font-mono text-sm"></pre>
 		</div>
+		<div style="display: none;" id="excel-preview" class="max-w-full overflow-x-auto border-2">
+		</div>
 	</main>
 	<script type="module">
 		function isBase64PDF(base64String) {
 			return base64String.substring(0, 4) === 'JVBER';
+		}
+		function isBase64Excel(base64String) {
+			console.log('isBase64Excel', base64String.substring(0, 5), base64String.substring(0, 5) === 'PD94b');
+			return base64String.substring(0, 5) === 'PD94b';
 		}
 		function base64ToText(base64String) {
 			// Étape 1 : décoder Base64 vers une chaîne binaire (ASCII)
@@ -44,15 +67,95 @@
 			// Étape 3 : décoder les octets en texte UTF-8
 			const decoder = new TextDecoder('utf-8');
 			return decoder.decode(byteArray);
+		}
+		function excelToHTML(base64) {
+			const parser = new DOMParser();
+			const xmlDoc = parser.parseFromString(base64ToText(base64), "text/xml");
+
+			// === Étape 1 : Styles ===
+			const styleMap = {};
+			const styles = xmlDoc.querySelectorAll("Style");
+
+			styles.forEach(style => {
+				const id = style.getAttribute("ss:ID");
+				const font = style.querySelector("Font");
+				const alignment = style.querySelector("Alignment");
+				const interior = style.querySelector("Interior");
+
+				const styleProps = {
+					classList: [],
+					style: []
+				};
+
+				if (font) {
+					if (font.getAttribute("ss:Bold") === "1") styleProps.classList.push("bold");
+					if (font.getAttribute("ss:Italic") === "1") styleProps.classList.push("italic");
+					if (font.getAttribute("ss:Color")) {
+						styleProps.style.push(`color: ${font.getAttribute("ss:Color")}`);
+					}
+				}
+
+				if (alignment) {
+					const horiz = alignment.getAttribute("ss:Horizontal");
+					if (horiz) {
+						styleProps.classList.push("align-" + horiz.toLowerCase());
+					}
+				}
+
+				if (interior && interior.getAttribute("ss:Color")) {
+					const bgColor = interior.getAttribute("ss:Color");
+					styleProps.style.push(`background-color: ${bgColor}`);
+				}
+
+				styleMap[id] = styleProps;
+			});
+
+			// === Étape 2 : Lecture des données ===
+			const worksheet = xmlDoc.querySelector("Worksheet");
+			const rows = worksheet.querySelectorAll("Table > Row");
+
+			let html = "<table><tbody>";
+
+			rows.forEach(row => {
+				html += "<tr>";
+				const cells = row.querySelectorAll("Cell");
+
+				cells.forEach(cell => {
+					const data = cell.querySelector("Data");
+					const text = data?.textContent || "";
+					const styleID = cell.getAttribute("ss:StyleID");
+					const props = styleMap[styleID] || { classList: [], style: [] };
+
+					const classAttr = props.classList.join(" ");
+					const styleAttr = props.style.join("; ");
+
+					// Gestion des cellules fusionnées (colspan)
+					const mergeAcross = cell.getAttribute("ss:MergeAcross");
+					const colspan = mergeAcross ? parseInt(mergeAcross, 10) + 1 : 1;
+
+					html += `<td class="${classAttr}" style="${styleAttr}" colspan="${colspan}">${text}</td>`;
+				});
+
+				html += "</tr>";
+			});
+
+			html += "</tbody></table>";
+			return html;
 		}		
 		function updatePreview(content) {
 			const pdfPreview = document.querySelector('#pdf-preview');
 			const textPreview = document.querySelector('#text-preview');
+			const excelPreview = document.querySelector('#excel-preview');
 			pdfPreview.style.display = 'none';
 			textPreview.style.display = 'none';
+			excelPreview.style.display = 'none';
 			if (isBase64PDF(content)) {
 				pdfPreview.data = "data:application/pdf;base64," + content;
 				pdfPreview.style.display = 'block';
+			} else if (isBase64Excel(content)) {
+				const htmlContent = excelToHTML(content);
+				excelPreview.innerHTML = htmlContent;
+				excelPreview.style.display = 'block';
 			} else {
 				const textContent = document.querySelector('#text-content');
 				textContent.textContent = base64ToText(content);
