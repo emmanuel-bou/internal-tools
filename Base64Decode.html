@@ -27,12 +27,37 @@
 		<input class="border-2 flex-grow" id="base64input" type="input"/>
 	</header>
 	<main class="grow flex flex-row flex-nowrap justify-between space-x-3">
-		<object class="w-full h-full border-2" id="preview" type="application/pdf"></object>
+		<object style="display: none;" class="w-full h-full border-2" id="pdf-preview" type="application/pdf"></object>
+		<div style="display: none;" id="text-preview" class="max-w-full overflow-x-auto border-2">
+			<pre id="text-content" class="whitespace-pre font-mono text-sm"></pre>
+		</div>
 	</main>
 	<script type="module">
+		function isBase64PDF(base64String) {
+			return base64String.substring(0, 4) === 'JVBER';
+		}
+		function base64ToText(base64String) {
+			// Étape 1 : décoder Base64 vers une chaîne binaire (ASCII)
+			const binaryString = atob(base64String);
+			// Étape 2 : convertir la chaîne binaire en tableau d’octets
+			const byteArray = Uint8Array.from(binaryString, char => char.charCodeAt(0));
+			// Étape 3 : décoder les octets en texte UTF-8
+			const decoder = new TextDecoder('utf-8');
+			return decoder.decode(byteArray);
+		}		
 		function updatePreview(content) {
-			const preview = document.querySelector('#preview');
-			preview.data = "data:application/pdf;base64," + content;
+			const pdfPreview = document.querySelector('#pdf-preview');
+			const textPreview = document.querySelector('#text-preview');
+			pdfPreview.style.display = 'none';
+			textPreview.style.display = 'none';
+			if (isBase64PDF(content)) {
+				pdfPreview.data = "data:application/pdf;base64," + content;
+				pdfPreview.style.display = 'block';
+			} else {
+				const textContent = document.querySelector('#text-content');
+				textContent.textContent = base64ToText(content);
+				textPreview.style.display = 'block';
+			}
 		}
 		const base64Input = document.querySelector('#base64input');
 		base64Input.addEventListener('paste', (event) => {
