@@ -207,6 +207,9 @@
 				excelPreview.style.display = 'block';
 			} else {
 				const textContent = document.querySelector('#text-content');
+				if (content == null || content === undefined || content.length === 0) {
+					return;
+				}
 				const decodedText = base64ToText(content);
 				try {
 					const data = await parseCsv(decodedText);
