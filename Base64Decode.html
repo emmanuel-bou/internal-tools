@@ -72,75 +72,89 @@
 			const parser = new DOMParser();
 			const xmlDoc = parser.parseFromString(base64ToText(base64), "text/xml");
 
-			// === Étape 1 : Styles ===
+			// Parse styles (comme avant)
 			const styleMap = {};
 			const styles = xmlDoc.querySelectorAll("Style");
-
 			styles.forEach(style => {
 				const id = style.getAttribute("ss:ID");
 				const font = style.querySelector("Font");
 				const alignment = style.querySelector("Alignment");
 				const interior = style.querySelector("Interior");
 
-				const styleProps = {
-					classList: [],
-					style: []
-				};
-
+				const styleProps = { classList: [], style: [] };
 				if (font) {
-					if (font.getAttribute("ss:Bold") === "1") styleProps.classList.push("bold");
-					if (font.getAttribute("ss:Italic") === "1") styleProps.classList.push("italic");
-					if (font.getAttribute("ss:Color")) {
-						styleProps.style.push(`color: ${font.getAttribute("ss:Color")}`);
-					}
+				if (font.getAttribute("ss:Bold") === "1") styleProps.classList.push("bold");
+				if (font.getAttribute("ss:Italic") === "1") styleProps.classList.push("italic");
+				if (font.getAttribute("ss:Color")) styleProps.style.push(`color: ${font.getAttribute("ss:Color")}`);
 				}
-
 				if (alignment) {
-					const horiz = alignment.getAttribute("ss:Horizontal");
-					if (horiz) {
-						styleProps.classList.push("align-" + horiz.toLowerCase());
-					}
+				const horiz = alignment.getAttribute("ss:Horizontal");
+				if (horiz) styleProps.classList.push("align-" + horiz.toLowerCase());
 				}
-
 				if (interior && interior.getAttribute("ss:Color")) {
-					const bgColor = interior.getAttribute("ss:Color");
-					styleProps.style.push(`background-color: ${bgColor}`);
+				styleProps.style.push(`background-color: ${interior.getAttribute("ss:Color")}`);
 				}
-
 				styleMap[id] = styleProps;
 			});
 
-			// === Étape 2 : Lecture des données ===
 			const worksheet = xmlDoc.querySelector("Worksheet");
-			const rows = worksheet.querySelectorAll("Table > Row");
+			const rows = Array.from(worksheet.querySelectorAll("Table > Row"));
+
+			// Structure pour mémoriser quelles cellules sauter (pour fusion verticale)
+			// Clé = "rowIndex,colIndex"
+			const skipCells = new Set();
 
 			let html = "<table><tbody>";
 
-			rows.forEach(row => {
+			rows.forEach((row, rowIndex) => {
 				html += "<tr>";
-				const cells = row.querySelectorAll("Cell");
+				const cells = Array.from(row.querySelectorAll("Cell"));
+				let colIndex = 0;
 
-				cells.forEach(cell => {
+				for (let i = 0; i < cells.length; i++) {
+					// Avancer colIndex si cette position est "skippée"
+					while (skipCells.has(`${rowIndex},${colIndex}`)) {
+						colIndex++;
+					}
+
+					// Si cellule absente (Excel autorise les cellules vides non créées), on peut insérer une cellule vide
+					const cell = cells[i];
 					const data = cell.querySelector("Data");
-					const text = data?.textContent || "";
+					const text = data ? data.textContent : "";
+
+					// Gestion styles
 					const styleID = cell.getAttribute("ss:StyleID");
 					const props = styleMap[styleID] || { classList: [], style: [] };
-
 					const classAttr = props.classList.join(" ");
 					const styleAttr = props.style.join("; ");
 
-					// Gestion des cellules fusionnées (colspan)
+					// Gestion fusions
 					const mergeAcross = cell.getAttribute("ss:MergeAcross");
 					const colspan = mergeAcross ? parseInt(mergeAcross, 10) + 1 : 1;
 
-					html += `<td class="${classAttr}" style="${styleAttr}" colspan="${colspan}">${text}</td>`;
-				});
+					const mergeDown = cell.getAttribute("ss:MergeDown");
+					const rowspan = mergeDown ? parseInt(mergeDown, 10) + 1 : 1;
 
+					// Marquer les cellules à skipper dans les lignes suivantes pour fusion verticale
+					if (rowspan > 1) {
+						for (let r = rowIndex + 1; r < rowIndex + rowspan; r++) {
+							for (let c = colIndex; c < colIndex + colspan; c++) {
+								skipCells.add(`${r},${c}`);
+							}
+						}
+					}
+
+					html += `<td class="${classAttr}" style="${styleAttr}" colspan="${colspan}" rowspan="${rowspan}">${text}</td>`;
+
+					colIndex += colspan;
+				}
+
+				// Gérer les cellules vides à la fin ? (optionnel)
 				html += "</tr>";
 			});
 
 			html += "</tbody></table>";
-			return html;
+  			return html;
 		}		
 		function updatePreview(content) {
 			const pdfPreview = document.querySelector('#pdf-preview');
