@@ -1,0 +1,50 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" class="h-full leading-none">
+<head>
+	<meta charset="utf-8" />
+	<title>Décodage Base64</title>
+	<link rel="shortcut icon" type="image/png" href="favicon.png"/>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		tailwind.config = {
+			theme: {
+				extend: {
+					colors: {
+						tomato: '#e74c3c',
+					}
+				}
+			}
+		}
+	</script>	
+</head>
+<body class="h-full flex flex-col flex-nowrap p-1">
+	<header class="grow-0 flex flex-row space-x-3 ">
+		<h1 class="text-lg">Chargement contenu en Base64</h1>
+		<button id="run" class="appearance-none border-none flex items-center justify-center px-4 py-2 bg-tomato text-white rounded hover:bg-red-600 transition text-sm"><span class="leading-none">Run</span></button>
+	</header>
+	<header class="grow-0 flex flex-row py-1 space-x-3 items-baseline">
+		<label for="bulletin"><span>Base64 : </span></label>
+		<input class="border-2 flex-grow" id="base64input" type="input"/>
+	</header>
+	<main class="grow flex flex-row flex-nowrap justify-between space-x-3">
+		<object class="w-full h-full border-2" id="preview" type="application/pdf"></object>
+	</main>
+	<script type="module">
+		function updatePreview(content) {
+			const preview = document.querySelector('#preview');
+			preview.data = "data:application/pdf;base64," + content;
+		}
+		const base64Input = document.querySelector('#base64input');
+		base64Input.addEventListener('paste', (event) => {
+			updatePreview((event.clipboardData || window.clipboardData).getData('text'));
+		});
+		base64Input.addEventListener('input', (event) => {
+			updatePreview(base64Input.value);
+		});
+		const run = document.querySelector('#run');
+		run.addEventListener('click', async (event) => {
+			updatePreview(base64Input.value);
+		});
+	</script>
+</body>
+</html>
