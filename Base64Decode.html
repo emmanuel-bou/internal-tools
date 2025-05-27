@@ -217,19 +217,19 @@
 			if (isBase64PDF(content)) {
 				pdfPreview.data = "data:application/pdf;base64," + content;
 				pdfPreview.style.display = 'block';
-				download.style.display = 'block';
+				download.style.display = 'flex';
 			} else if (isBase64Excel(content)) {
 				const htmlContent = excelToHTML(content);
 				excelPreview.innerHTML = htmlContent;
 				excelPreview.style.display = 'block';
-				download.style.display = 'block';
+				download.style.display = 'flex';
 			} else {
 				const textContent = document.querySelector('#text-content');
 				if (content == null || content === undefined || content.length === 0) {
 					download.style.display = 'none';
 					return;
 				}
-				download.style.display = 'block';
+				download.style.display = 'flex';
 				const decodedText = base64ToText(content);
 				if (isCsv(decodedText)) {
 					try {
