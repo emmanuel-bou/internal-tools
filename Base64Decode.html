@@ -41,6 +41,7 @@
 	<header class="grow-0 flex flex-row space-x-3 ">
 		<h1 class="text-lg">Chargement contenu en Base64</h1>
 		<button id="run" class="appearance-none border-none flex items-center justify-center px-4 py-2 bg-tomato text-white rounded hover:bg-red-600 transition text-sm"><span class="leading-none">Run</span></button>
+		<button id="download" class="appearance-none border-none flex items-center justify-center px-4 py-2 bg-tomato text-white rounded hover:bg-red-600 transition text-sm"><span class="leading-none">Télécharger</span></button>
 	</header>
 	<header class="grow-0 flex flex-row py-1 space-x-3 items-baseline">
 		<label for="bulletin"><span>Base64 : </span></label>
@@ -55,11 +56,12 @@
 		</div>
 	</main>
 	<script type="module">
+		const run = document.querySelector('#run');
+		const download = document.querySelector('#download');
 		function isBase64PDF(base64String) {
 			return base64String.substring(0, 5) === 'JVBER';
 		}
 		function isBase64Excel(base64String) {
-			console.log('isBase64Excel', base64String.substring(0, 5), base64String.substring(0, 5) === 'PD94b');
 			return base64String.substring(0, 5) === 'PD94b';
 		}
 		function base64ToText(base64String) {
@@ -159,6 +161,20 @@
 			html += "</tbody></table>";
   			return html;
 		}
+		function isCsv(text) {
+			const lines = text.trim().split(/\r?\n/);
+			if (lines.length < 2) return null;
+			const separators = [';', ',', '\t'];
+			for (const sep of separators) {
+				const count = (line) => (line.match(new RegExp(`\\${sep}`, 'g')) || []).length;
+				const c1 = count(lines[0]);
+				const c2 = count(lines[1]);
+				if (c1 > 0 && c1 === c2) {
+					return true;
+				}
+			}
+			return false;
+		}
 		function parseCsv(csvString) {
 			return new Promise((resolve, reject) => {
 				Papa.parse(csvString, {
@@ -201,22 +217,30 @@
 			if (isBase64PDF(content)) {
 				pdfPreview.data = "data:application/pdf;base64," + content;
 				pdfPreview.style.display = 'block';
+				download.style.display = 'block';
 			} else if (isBase64Excel(content)) {
 				const htmlContent = excelToHTML(content);
 				excelPreview.innerHTML = htmlContent;
 				excelPreview.style.display = 'block';
+				download.style.display = 'block';
 			} else {
 				const textContent = document.querySelector('#text-content');
 				if (content == null || content === undefined || content.length === 0) {
+					download.style.display = 'none';
 					return;
 				}
+				download.style.display = 'block';
 				const decodedText = base64ToText(content);
-				try {
-					const data = await parseCsv(decodedText);
-					excelPreview.innerHTML = jsonToTable(data);
-					excelPreview.style.display = 'block';
-				} catch (err) {
-					console.log('Parsing CSV failed, showing as text:', err);
+				if (isCsv(decodedText)) {
+					try {
+						const data = await parseCsv(decodedText);
+						excelPreview.innerHTML = jsonToTable(data);
+						excelPreview.style.display = 'block';
+					} catch (err) {
+						textContent.textContent = decodedText;
+						textPreview.style.display = 'block';
+					}
+				} else {
 					textContent.textContent = decodedText;
 					textPreview.style.display = 'block';
 				}
@@ -229,9 +253,53 @@
 		base64Input.addEventListener('input', async (event) => {
 			updatePreview(base64Input.value);
 		});
-		const run = document.querySelector('#run');
 		run.addEventListener('click', async (event) => {
 			updatePreview(base64Input.value);
+		});
+		function getTimestamp() {
+			const now = new Date();
+			const pad = (n) => String(n).padStart(2, '0');
+
+			const yyyy = now.getFullYear();
+			const mm = pad(now.getMonth() + 1); // Mois = 0-indexé
+			const dd = pad(now.getDate());
+			const hh = pad(now.getHours());
+			const min = pad(now.getMinutes());
+			const ss = pad(now.getSeconds());
+
+			return `${yyyy}-${mm}-${dd}_${hh}-${min}-${ss}`;
+		}
+		function getFileName(base, ext) {
+			return `${base}_${getTimestamp()}.${ext}`;
+		}		
+		download.style.display = 'none';
+		download.addEventListener('click', async (event) => {
+			const content = base64Input.value;
+			console.log('isBase64Excel(content)', isBase64Excel(content));
+			if (isBase64PDF(content)) {
+				const link = document.createElement('a');
+				link.href = "data:application/pdf;base64," + content;
+				link.download = getFileName('document', 'pdf');
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			} else if (isBase64Excel(content)) {
+				const link = document.createElement('a');
+				link.href = "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + content;
+				link.download = getFileName('export_excel', 'xls');
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			} else {
+				const decodedText = base64ToText(content);
+				const blob = new Blob([decodedText], { type: 'text/plain' });
+				const link = document.createElement('a');
+				link.href = URL.createObjectURL(blob);
+				link.download = getFileName('document', 'txt');
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			}
 		});
 	</script>
 </body>
