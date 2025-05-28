@@ -64,13 +64,13 @@
 		function isBase64Excel(base64String) {
 			return base64String.substring(0, 5) === 'PD94b';
 		}
-		function base64ToText(base64String) {
+		function base64ToText(base64String, encoding = 'windows-1252') {
 			// Étape 1 : décoder Base64 vers une chaîne binaire (ASCII)
 			const binaryString = atob(base64String);
 			// Étape 2 : convertir la chaîne binaire en tableau d’octets
 			const byteArray = Uint8Array.from(binaryString, char => char.charCodeAt(0));
-			// Étape 3 : décoder les octets en texte UTF-8
-			const decoder = new TextDecoder('utf-8');
+			// Étape 3 : décoder les octets en texte
+			const decoder = new TextDecoder(encoding);
 			return decoder.decode(byteArray);
 		}
 		function excelToHTML(base64) {
