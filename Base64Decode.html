@@ -49,7 +49,7 @@
 	</header>
 	<main class="grow flex flex-row flex-nowrap justify-between">
 		<object style="display: none;" class="w-full h-full border-2" id="pdf-preview" type="application/pdf"></object>
-		<div style="display: none;" id="text-preview" class="max-w-full overflow-x-auto border-2">
+		<div style="display: none;" id="text-preview" class="flex-grow overflow-x-auto border-2">
 			<pre id="text-content" class="whitespace-pre font-mono text-sm"></pre>
 		</div>
 		<div style="display: none;" id="excel-preview" class="max-w-full overflow-x-auto border-2">
@@ -64,14 +64,18 @@
 		function isBase64Excel(base64String) {
 			return base64String.substring(0, 5) === 'PD94b';
 		}
-		function base64ToText(base64String, encoding = 'windows-1252') {
+		function base64ToByteArray(base64String) {
 			// Étape 1 : décoder Base64 vers une chaîne binaire (ASCII)
 			const binaryString = atob(base64String);
 			// Étape 2 : convertir la chaîne binaire en tableau d’octets
-			const byteArray = Uint8Array.from(binaryString, char => char.charCodeAt(0));
-			// Étape 3 : décoder les octets en texte
+			return Uint8Array.from(binaryString, char => char.charCodeAt(0));
+		}
+		function byteArrayToText(byteArray, encoding = 'windows-1252') {
 			const decoder = new TextDecoder(encoding);
 			return decoder.decode(byteArray);
+		}
+		function base64ToText(base64String, encoding = 'windows-1252') {
+			return byteArrayToText(base64ToByteArray(base64String), encoding);
 		}
 		function excelToHTML(base64) {
 			const parser = new DOMParser();
@@ -161,6 +165,18 @@
 			html += "</tbody></table>";
   			return html;
 		}
+		function isLikelyBinaryPGP(bytes) {
+			// Vérifie si le 1er octet correspond à un en-tête de paquet PGP
+			const first = bytes[0];
+
+			// Bit 7 doit être 1 (donc >= 128)
+			if (first < 128) return false;
+
+			// Old format: bits 6-5 = 1x (type de tag), bits 4-2 = length type
+			// New format: bits 7 = 1, bit 6 = 1 => nouveau format
+			const tag = (first & 0b01111100) >> 2;
+			return tag >= 1 && tag <= 63;
+		}
 		function isCsv(text) {
 			const lines = text.trim().split(/\r?\n/);
 			if (lines.length < 2) return null;
@@ -230,8 +246,12 @@
 					return;
 				}
 				download.style.display = 'flex';
-				const decodedText = base64ToText(content);
-				if (isCsv(decodedText)) {
+				const byteArray = base64ToByteArray(content);
+				const decodedText = byteArrayToText(byteArray);
+				if (isLikelyBinaryPGP(byteArray)) {
+					textContent.textContent = 'Contenu chiffré avec PGP. Impossible de l\'afficher.';
+					textPreview.style.display = 'block';
+				} else if (isCsv(decodedText)) {
 					try {
 						const data = await parseCsv(decodedText);
 						excelPreview.innerHTML = jsonToTable(data);
@@ -291,14 +311,28 @@
 				link.click();
 				document.body.removeChild(link);
 			} else {
-				const decodedText = base64ToText(content);
-				const blob = new Blob([decodedText], { type: 'text/plain' });
-				const link = document.createElement('a');
-				link.href = URL.createObjectURL(blob);
-				link.download = getFileName('document', 'txt');
-				document.body.appendChild(link);
-				link.click();
-				document.body.removeChild(link);
+				const byteArray = base64ToByteArray(content);
+				if (isLikelyBinaryPGP(byteArray)) {
+					const blob = new Blob([byteArray], { type: 'application/octet-stream' });
+					const url = URL.createObjectURL(blob);
+					const link = document.createElement('a');
+					link.href = url;
+					link.download = getFileName('document', 'pgp');
+					link.style.display = 'none';
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
+					URL.revokeObjectURL(url);
+				} else {
+					const decodedText = byteArrayToText(byteArray);
+					const blob = new Blob([decodedText], { type: 'text/plain' });
+					const link = document.createElement('a');
+					link.href = URL.createObjectURL(blob);
+					link.download = getFileName('document', 'txt');
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
+				}
 			}
 		});
 	</script>
