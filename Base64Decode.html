@@ -249,7 +249,7 @@
 				const byteArray = base64ToByteArray(content);
 				const decodedText = byteArrayToText(byteArray);
 				if (isLikelyBinaryPGP(byteArray)) {
-					textContent.textContent = 'Contenu chiffré avec PGP. Impossible de l\'afficher.';
+					textContent.textContent = 'Contenu chiffré avec PGP. Impossible de l\'afficher.\nVous pouvez télécharger le fichier et le déchiffrer avec un outil adapté.';
 					textPreview.style.display = 'block';
 				} else if (isCsv(decodedText)) {
 					try {
